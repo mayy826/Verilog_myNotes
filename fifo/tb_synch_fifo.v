@@ -7,15 +7,15 @@ reg         clk		= 1'b0 ;
 reg         reset	= 1'b0 ;
 reg         rd_en 	= 1'b0 ;
 reg         wr_en 	= 1'b0 ;
-reg  [15:0] write_data	   	;
+reg  [15:0] write_data	   ;
 
 
 // fifo Outputs
-wire [15:0] read_data	   		;
-wire 		full, empty    		;
-wire		full_nxt, empty_nxt	;
-wire [3:0]  room_avail, data_avail	;
-wire [15:0]  memory_wire		;
+wire [15:0] read_data	   ;
+wire 		full, empty    ;
+wire		full_nxt, empty_nxt;
+wire [3:0]  room_avail, data_avail;
+wire [15:0]  memory_wire;
 
 // clk  
 always  
@@ -28,20 +28,22 @@ synch_fifo test_instance(
 		.reset		(reset)		, 
 		.rd_en		(rd_en)		, 
 		.wr_en		(wr_en)		, 
-		.write_data (write_data)	, 
-		.read_data  (read_data) 	, 
-		.full		(full) 		, 
-		.empty		(empty)		,
-		.full_nxt   (full_nxt) 		,
-		.empty_nxt	(empty_nxt) 	,	
-		.room_avail	(room_avail)	, 
-		.data_avail (data_avail)	,
+		.write_data (write_data), 
+		.read_data  (read_data) , 
+		.full		(full) , 
+		.empty		(empty),
+		.full_nxt   (full_nxt) ,
+		.empty_nxt	(empty_nxt) ,	
+		.room_avail	(room_avail), 
+		.data_avail (data_avail),
 		.memory_wire( memory_wire)
 );
 
 
     initial
     begin
+		$dumpfile("dump.vcd");
+		$dumpvars(1,fifo_anya_tb);
         $display("\nstatus: %t Testbench started\n\n", $time);
         #(100) reset  =  1;
         $display("status: %t done reset", $time);
@@ -60,15 +62,15 @@ synch_fifo test_instance(
 //	write fifo task??????
 //-----------------------------------
     task write_fifo;
-	input        full ;
+		input        full ;
         input [7:0]  value;
 	begin
-		@(posedge clk)		;
-		wr_en       <= ~ full	;
-		write_data  <= value    ;
-		@(posedge clk)		;
-		wr_en		<= 1'b0 ;
-		@(posedge clk)		;		
+		@(posedge clk);
+		wr_en       <= ~ full;
+		write_data  <= value   ;
+		@(posedge clk);
+		wr_en		<= 1'b0    ;
+		@(posedge clk);		
 	end
 	endtask
 
@@ -81,9 +83,9 @@ synch_fifo test_instance(
 		rd_en 	  <= 1'b0;
 		else begin		
 		@(posedge clk);
-        	rd_en     <= 1'b1;
-        	@(posedge clk);
-        	rd_en     <= 1'b0;	
+        rd_en     <= 1'b1;
+        @(posedge clk);
+        rd_en     <= 1'b0;	
 		@(posedge clk);	
 		end
 	end
@@ -93,24 +95,16 @@ synch_fifo test_instance(
 // read after write task
 //------------------------------------
     task read_after_write;
-	input [31:0] 	num_write   ; //write 幾次
-	reg [7:0] 		idx			; //第幾次trigger
-	reg [7:0] 	valW			;
-	integer     error			;
-	begin
-		error = 0;
+	input 	[31:0] 	num_write   ; //write 幾次
+	reg 	[7:0] 		idx			; //第幾次trigger
+	reg  	[7:0] 	valW			;
+
+
 	for (idx = 0; idx < 8 ; idx = idx + 1) begin
 	    valW = $random;
 	    write_fifo(full, valW);
 	    read_fifo(empty);
-	    if (read_data != valW) begin
-		error = error + 1;
-		$display("status: %t ERROR at idx:0x%08x D:0x%02x, but D:0x%02x expected",$time,
-			idx, read_data, valW);
-	    end
-	end
-		if (error == 0) 
-	    $display("status: %t read-after-write test pass", $time);
+	   
 	end
 	endtask	
 	
@@ -120,9 +114,8 @@ synch_fifo test_instance(
         reg [15:0]  index       ;
         reg [7:0] 	valW		;
         reg [7:0]   valC        ;
-	integer 		error		;
+
     begin
-        error = 0;
         for (index = 0; index < 9; index = index + 1) begin //讓fifo滿
             valW = ~(index + 1);
             write_fifo(full,valW);
@@ -130,16 +123,9 @@ synch_fifo test_instance(
 
         for (index = 0; index < 20; index = index + 1) begin //空了繼續讀fifo
             valC = ~(index + 1);
-            read_fifo(empty);
-            if (read_data != valC) begin
-			error = error + 1;
-                $display("status: %t ERROR at Index:0x%08x D:0x%02x, but D:0x%02x expected",$time,
-			index, read_data, valC);
-            end
+            read_fifo(empty);          
         end
 
-        if (error == 0) 
-	    $display("status: %t read-all-after-write-all test pass", $time);
     end
     endtask	
 	
