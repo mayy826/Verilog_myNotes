@@ -42,8 +42,8 @@ synch_fifo test_instance(
 
     initial
     begin
-		$dumpfile("dump.vcd");
-		$dumpvars(1,fifo_anya_tb);
+      $dumpfile("dump.vcd");
+      $dumpvars(1,fifo_anya_tb);
         $display("\nstatus: %t Testbench started\n\n", $time);
         #(100) reset  =  1;
         $display("status: %t done reset", $time);
@@ -52,32 +52,39 @@ synch_fifo test_instance(
         repeat(5) @(posedge clk);
         read_all_after_write_all();
 	    repeat(5) @(posedge clk);
-        repeat(5) @(posedge clk);
+        reset <= 1'b0;
+        repeat(2) @(posedge clk);
+      	reset <= 1'b1;
+      	read_after_write(50);
         $finish;
-		$display("status222: %t done reset", $time);
+		$display("status: %t done reset", $time);
     end
 
 
 
-//	write fifo task??????
+//	write fifo task
 //-----------------------------------
     task write_fifo;
 		input        full ;
-        input [7:0]  value;
+        input [15:0]  value;
 	begin
+     	if(full == 1'b1)
+		wr_en 	  <= 1'b0;
+		else begin		
 		@(posedge clk);
-		wr_en       <= ~ full;
-		write_data  <= value   ;
-		@(posedge clk);
-		wr_en		<= 1'b0    ;
-		@(posedge clk);		
-	end
+        wr_en     <= 1'b1;
+        write_data  <= value   ;
+        @(posedge clk);
+        wr_en     <= 1'b0;	
+		@(posedge clk);	
+		end           
+    end
 	endtask
 
 //  read fifo task
 //-----------------------------------
 	task read_fifo;
-		input        empty ;//
+		input        empty /
 	begin
 		if(empty == 1'b1)
 		rd_en 	  <= 1'b0;
@@ -95,9 +102,9 @@ synch_fifo test_instance(
 // read after write task
 //------------------------------------
     task read_after_write;
-	input 	[31:0] 	num_write   ; //write 幾次
-	reg 	[7:0] 		idx			; //第幾次trigger
-	reg  	[7:0] 	valW			;
+	input [31:0] 	num_write   ; //write 幾次
+	reg [7:0] 		idx			; //第幾次trigger
+      reg [15:0] 	valW			;
 
 
 	for (idx = 0; idx < 8 ; idx = idx + 1) begin
@@ -112,8 +119,8 @@ synch_fifo test_instance(
     //--------------------------------------------------------------------------
     task read_all_after_write_all;
         reg [15:0]  index       ;
-        reg [7:0] 	valW		;
-        reg [7:0]   valC        ;
+        reg [15:0] 	valW		;
+        reg [15:0]   valC        ;
 
     begin
         for (index = 0; index < 9; index = index + 1) begin //讓fifo滿
