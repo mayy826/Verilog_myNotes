@@ -1,25 +1,30 @@
 `timescale 1ns / 1ps
 
-module synch_fifo( clk, reset, rd_en, wr_en, write_data, read_data, full, empty, full_nxt, empty_nxt, room_avail, data_avail,memory_wire);
+module synch_fifo( clk, reset, rd_en0, wr_en0, write_data, read_data, full, empty, full_nxt, empty_nxt, room_avail, data_avail,memory_wire);
 
 	parameter FIFO_width = 16,
-		  FIFO_depth = 8 ,
-		  FIFO_ptr   = 3 ;
+			  FIFO_depth = 8 ,
+			  FIFO_ptr   = 3 ;
 	
-	input		   				clk, reset         ;
-	input	 	   				rd_en, wr_en	   ;
+	input		   				clk, reset 			   ;
+	input	 	   				rd_en0, wr_en0		   ;
 	input	[FIFO_width-1:0] 	write_data 			   ; 
 	output	[FIFO_width-1:0] 	read_data 			   ;
-	output		   				full, empty 	   ; 
-	output		   				full_nxt, empty_nxt;
-	output	[FIFO_ptr:0]  		room_avail, data_avail 	 	   ;
+	output		   				full, empty 		   ; 
+	output		   				full_nxt, empty_nxt    ;
+	output	[FIFO_ptr:0]  		room_avail, data_avail ;
 	output  [FIFO_width-1:0] 	memory_wire			   ;
-
-			
 	
+	// check if full or empty,stop enable
+  	wire   rd_en ;
+	assign rd_en = rd_en0 && ~empty	;
+	
+  	wire   wr_en ;
+	assign wr_en = wr_en0 && ~full	;
+  
 	
 	//write-pointer control logic	依序寫register
-	reg	[FIFO_ptr-1:0]wr_reg_ptr;
+	reg		[FIFO_ptr-1:0]wr_reg_ptr;
 	reg 	[FIFO_ptr-1:0]wr_reg_ptr_nxt;
 		
 	always@(*)
@@ -35,17 +40,17 @@ module synch_fifo( clk, reset, rd_en, wr_en, write_data, read_data, full, empty,
 	
 	
 	//read-pointer control logic 依序讀register	
-	reg	[FIFO_ptr-1:0]rd_reg_ptr;
+	reg		[FIFO_ptr-1:0]rd_reg_ptr;
 	reg 	[FIFO_ptr-1:0]rd_reg_ptr_nxt;
 		
 	always@(*)
 	begin		
-		rd_reg_ptr_nxt = rd_reg_ptr ;//把上一個clk前的ptr存進nxt
+		rd_reg_ptr_nxt = rd_reg_ptr ;
 		if(rd_en == 1'b1)
-		   if (rd_reg_ptr == FIFO_depth-1)
-			rd_reg_ptr_nxt = 'd0;
-		   else
-			rd_reg_ptr_nxt = rd_reg_ptr + 1'b1;		
+			if (rd_reg_ptr == FIFO_depth-1)
+				rd_reg_ptr_nxt = 'd0;
+			else
+				rd_reg_ptr_nxt = rd_reg_ptr + 1'b1;		
 	end
 	
 	// calculate number of  entries in the FIFO
@@ -58,9 +63,9 @@ module synch_fifo( clk, reset, rd_en, wr_en, write_data, read_data, full, empty,
 		
 		if( wr_en == 1'b1 && rd_en==1'b1 )
 			num_entries_nxt = num_entries;
-		else if (wr_en == 1'b1)
+      else if (wr_en == 1'b1 && full == 1'b0)
 			num_entries_nxt = num_entries + 1'b1;
-		else if (rd_en == 1'b1)
+      else if (rd_en == 1'b1 && empty == 1'b0)
 			num_entries_nxt = num_entries - 1'b1;	
 				
 	end
@@ -73,7 +78,7 @@ module synch_fifo( clk, reset, rd_en, wr_en, write_data, read_data, full, empty,
 	
 	assign  full_nxt  		= (num_entries_nxt >= FIFO_depth) ? 1'b1 : 1'b0;
 	assign	empty_nxt 		= (num_entries_nxt <= 'd0       ) ? 1'b1 : 1'b0;
-	assign	data_avail  	= num_entries; //clk poedge num_entries <= num_entries_nxt 
+	assign	data_avail  	= num_entries;
 	assign  room_avail_nxt  = (FIFO_depth - num_entries_nxt); 
 		
 	always@(posedge clk or negedge reset)
@@ -84,13 +89,13 @@ module synch_fifo( clk, reset, rd_en, wr_en, write_data, read_data, full, empty,
 		full  	    <= 1'b0				;
 		empty 	    <= 1'b1				;
 		num_entries <= 'd0				; 
-		room_avail  <= FIFO_depth			;
+		room_avail  <= FIFO_depth		;
 		end
 		else begin
 		wr_reg_ptr  <= wr_reg_ptr_nxt	;
 		rd_reg_ptr  <= rd_reg_ptr_nxt	;
-		full  	    <= full_nxt		;
-		empty 	    <= empty_nxt	;
+		full  	    <= full_nxt			;
+		empty 	    <= empty_nxt		;
 		num_entries <= num_entries_nxt  ;
 		room_avail  <= room_avail_nxt   ;
 		end
@@ -106,8 +111,10 @@ module synch_fifo( clk, reset, rd_en, wr_en, write_data, read_data, full, empty,
 	begin
 		if(!reset) 
 			memory[wr_reg_ptr] <= 'h0000;
-		else if(wr_en == 1'b1)
-			memory[wr_reg_ptr] <= write_data ;				
+      else if(wr_en == 1'b1 )       
+			memory[wr_reg_ptr] <= write_data ;
+
+
 	end
 
 	reg [FIFO_width-1:0] rddata;
@@ -118,8 +125,11 @@ module synch_fifo( clk, reset, rd_en, wr_en, write_data, read_data, full, empty,
 	begin
 		if(!reset) 
 			rddata <=  'h0000 ;
-		else if (rd_en == 1'b1)
-			rddata <= memory[rd_reg_ptr] ;		
+      else if (rd_en == 1'b1 )
+			rddata <= memory[rd_reg_ptr] ;
+    
+
+   
 	end
 
 	
